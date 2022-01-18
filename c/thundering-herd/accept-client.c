@@ -7,13 +7,14 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 int main(int argc, char **argv)
 {
     int err, len, servfd;
     struct sockaddr_in servaddr;
 
-    if (argc != 2) {
+    if (argc != 3) {
         printf("usage: %s <ip> <msg>\n", argv[0]);
         exit(1);
     }
