@@ -2,32 +2,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-
-#define WORKERS 4
-
-void worker_routine(int listenfd) {
-	int connfd;
-    for(;;) {
-        connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &length);
-        if (connfd == -1) {
-            printf("accept error: %s(errno: %d)\n", strerror(errno), errno);
-            break;
-        }
-
-        len = recv(connfd, buff, sizeof(buff), 0);
-        buff[len] = '\0';
-        printf("=====recv====\n%s\n", buff);
-
-        send(connfd, buff, len, 0);
-
-        close(connfd);
-	}
-}
 
 int main(int argc, char **argv)
 {
@@ -58,11 +38,9 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    for (i = 0; i < WORKERS; i++) {
-	int pid = fork();
-	if (pid == 0) {
-	}
+    for(;;) {
         socklen_t length = sizeof(cliaddr);
+
         connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &length);
         if (connfd == -1) {
             printf("accept error: %s(errno: %d)\n", strerror(errno), errno);
@@ -77,5 +55,7 @@ int main(int argc, char **argv)
 
         close(connfd);
     }
+
     close(listenfd);
+    exit(0);
 }

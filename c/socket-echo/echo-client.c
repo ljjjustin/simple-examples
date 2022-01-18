@@ -14,7 +14,7 @@ int main(int argc, char **argv)
     char sendline[4096], recvline[4096];
 
     if (argc != 2) {
-        printf("usage: %s <server ip:port>\n", argv[0]);
+        printf("usage: %s <server ip>\n", argv[0]);
         exit(1);
     }
 
