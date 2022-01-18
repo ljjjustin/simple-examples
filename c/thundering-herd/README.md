@@ -132,9 +132,16 @@ lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48539735]
 ...
 ```
 
-统计程序的输出结果，四个进程的输出数量是*相同*的。
+统计程序的输出结果，四个进程的输出数量是**相同**的。
+
 从这里可以看出，在使用SO_REUSEPORT的情况下，即使四个进程不在同一个socket上监听相同的端口，其负载仍然是均衡的，这种均衡是内核实现的。
+
+因为同一个端口对应多个不同的监听socket，不同的socket可能有属于不同的进程，进程的数量常常不是固定的，如何保证负载均衡的效果，数据包来了，如何快速的找到与之对应的socket等。这些都是Linux内核在不断优化中的问题。
 
 # 参考
 
+https://en.wikipedia.org/wiki/Thundering_herd_problem
 https://lwn.net/Articles/542629/
+https://segmentfault.com/a/1190000020524323
+https://segmentfault.com/a/1190000020536287
+https://blog.csdn.net/dog250/article/details/51510823
