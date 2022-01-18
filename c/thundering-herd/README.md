@@ -74,6 +74,67 @@ $ for for i in $(seq 1 100); do c=$(printf "%03d" $i); ./accept-client localhost
 从上面的输出可以看到，各个子进程处理的连接数是完全一致的，没有负载不一致的情况。
 **由此可见，现在的Linux内核已经修复了惊群的问题。**
 
+# 对比
+
+惊群的问题在早期的Linux系统上确实存在，后来内核引入了SO_REUSEPORT特性，来解决这个问题，作为对比，需要修改accept-server的代码。
+使用SO_REUSEPORT之后的代码是`reuseport-server.c`。我们编译一下，然后启动服务器端。
+
+```bash
+$ make reuseport-server
+$ ./reuseport-server
+```
+
+然后查看reuseport-server监听的socket文件：
+
+```bash
+$ for pid in $(pgrep -f reuseport-server); do ls -l /proc/$pid/fd | grep socket; done
+lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48538952]
+lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48538954]
+lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48538956]
+lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48539735]
+```
+
+从上面的结果可以看出，现在四个reuseport-server是在不同的socket文件上监听。
+
+最后，同样用accept-client发起100次请求，输出如下：
+
+```text
+31042 received: msg001
+31043 received: msg002
+31042 received: msg003
+31042 received: msg004
+31044 received: msg005
+31041 received: msg006
+31044 received: msg007
+31041 received: msg008
+31042 received: msg009
+31043 received: msg010
+31042 received: msg011
+31044 received: msg012
+31042 received: msg013
+31043 received: msg014
+31041 received: msg015
+31044 received: msg016
+31042 received: msg017
+31042 received: msg018
+31044 received: msg019
+31042 received: msg020
+31041 received: msg021
+31043 received: msg022
+31042 received: msg023
+31042 received: msg024
+31043 received: msg025
+31043 received: msg026
+31044 received: msg027
+31041 received: msg028
+31041 received: msg029
+31044 received: msg030
+...
+```
+
+统计程序的输出结果，四个进程的输出数量是*相同*的。
+从这里可以看出，在使用SO_REUSEPORT的情况下，即使四个进程不在同一个socket上监听相同的端口，其负载仍然是均衡的，这种均衡是内核实现的。
+
 # 参考
 
 https://lwn.net/Articles/542629/
