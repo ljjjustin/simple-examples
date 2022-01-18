@@ -140,8 +140,8 @@ lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48539735]
 
 # 参考
 
-https://en.wikipedia.org/wiki/Thundering_herd_problem
-https://lwn.net/Articles/542629/
-https://segmentfault.com/a/1190000020524323
-https://segmentfault.com/a/1190000020536287
-https://blog.csdn.net/dog250/article/details/51510823
+* https://en.wikipedia.org/wiki/Thundering_herd_problem
+* https://lwn.net/Articles/542629/
+* https://segmentfault.com/a/1190000020524323
+* https://segmentfault.com/a/1190000020536287
+* https://blog.csdn.net/dog250/article/details/51510823
