@@ -138,6 +138,74 @@ lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48539735]
 
 因为同一个端口对应多个不同的监听socket，不同的socket可能有属于不同的进程，进程的数量常常不是固定的，如何保证负载均衡的效果，数据包来了，如何快速的找到与之对应的socket等。这些都是Linux内核在不断优化中的问题。
 
+# epoll惊群问题
+
+测试环境说明：
+* 操作系统：Ubuntu 18.04.6
+* 内核版本：4.15.0-163-generic
+
+## 编译
+
+```bash
+$ make epoll-seperate-pollfd
+```
+
+## 运行
+
+服务器端程序支持启用EXCLUSIVE模式，启动服务器端程序的命令如下：
+```bash
+# 提高文件描述符限额，否则压测时可能出现文件描述符不够的问题
+$ ulimit 10000
+
+# 默认模式
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 0
+
+# EXCLUSIVE模式
+$ ./epoll-seperate-pollfd exclusive
+use epoll exclusive: 1
+
+```
+
+服务器端程序启动之后，启动6个ab进行压测
+```bash
+$ for i in {1..6}; do ab -n 500000 -c 800 http://localhost:5555/ & done
+```
+
+压测跑完后，看下各个进程处理的请求数量：
+
+```bash
+for p in $(pgrep -f epoll-seperate-pollfd); do kill -USR1 $p; done
+```
+
+这是服务器端的程序会输出统计信息。
+下面是这组是默认模式下，获得的数据：
+
+```
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 0
+4563 got 0 reqs
+4564 got 725269 reqs
+4565 got 742879 reqs
+4566 got 737861 reqs
+4567 got 796875 reqs
+```
+
+下面这组是启用exclusive时的一组数据：
+```
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 1
+4595 got 0 reqs
+4596 got 1159395 reqs
+4597 got 852929 reqs
+4598 got 658337 reqs
+4599 got 332605 reqs
+```
+
+## 结论
+从多次测试的情况来看，*启用exclusive之后，请求的分布很不均衡*，默认模式下各个子进程的负载反而比较均匀。
+从压测的结果看，*启用exclusive之后，请求的平均响应时间更短，每秒钟能处理的请求更多，性能提升约39%。*
+
 # 参考
 
 * https://en.wikipedia.org/wiki/Thundering_herd_problem
