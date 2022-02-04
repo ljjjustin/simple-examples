@@ -1,17 +1,17 @@
-# 惊群问题
+# accept惊群
 
 验证多进程同时监听同一个端口的情况下，内核是否存在惊群的问题。
 
 备注：测试是在centos7上执行的，内核版本是：3.10.0-1160.45.1.el7.x86_64
 
-# 编译
+## 编译
 
 ```bash
 $ make accept-client
 $ make accept-server
 ```
 
-# 执行
+## 执行
 
 1. 启动服务器端
 ```bash
@@ -68,13 +68,82 @@ $ for for i in $(seq 1 100); do c=$(printf "%03d" $i); ./accept-client localhost
 ...
 ```
 
-# 结论
+## 结论
 
 服务器端会创建4个子进程，然后在子进程中执行accept，等待新的连接，然后处理新的连接。
 从上面的输出可以看到，各个子进程处理的连接数是完全一致的，没有负载不一致的情况。
 **由此可见，现在的Linux内核已经修复了惊群的问题。**
 
-# 对比
+# epoll惊群问题
+
+测试环境说明：
+* 操作系统：Ubuntu 18.04.6
+* 内核版本：4.15.0-163-generic
+
+## 编译
+
+```bash
+$ make epoll-seperate-pollfd
+```
+
+## 运行
+
+服务器端程序支持启用EXCLUSIVE模式，启动服务器端程序的命令如下：
+```bash
+# 提高文件描述符限额，否则压测时可能出现文件描述符不够的问题
+$ ulimit -n 10000
+
+# 默认模式
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 0
+
+# EXCLUSIVE模式
+$ ./epoll-seperate-pollfd exclusive
+use epoll exclusive: 1
+
+```
+
+服务器端程序启动之后，启动6个ab进行压测
+```bash
+$ for i in {1..6}; do ab -n 500000 -c 800 http://localhost:5555/ & done
+```
+
+压测跑完后，看下各个进程处理的请求数量：
+
+```bash
+for p in $(pgrep -f epoll-seperate-pollfd); do kill -USR1 $p; done
+```
+
+这是服务器端的程序会输出统计信息。
+下面是这组是默认模式下，获得的数据：
+
+```
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 0
+4563 got 0 reqs  # 父进程不参与网络请求的处理
+4564 got 725269 reqs
+4565 got 742879 reqs
+4566 got 737861 reqs
+4567 got 796875 reqs
+```
+从上面的结果来看，各个子进程处理的请求大致上均等的。
+
+下面这组是启用exclusive时的一组数据：
+```
+$ ./epoll-seperate-pollfd
+use epoll exclusive: 1
+4595 got 0 reqs  # 父进程不参与网络请求的处理
+4596 got 1159395 reqs
+4597 got 852929 reqs
+4598 got 658337 reqs
+4599 got 332605 reqs
+```
+从多次测试的情况来看，启用exclusive之后，pid越小的进程处理的请求越多，这应该是和epoll的队列操作有关系。
+
+## 结论
+从多次测试的情况来看，**启用exclusive之后，请求的分布很不均衡**，默认模式下各个子进程的负载反而比较均匀。
+
+# REUSEPORT
 
 惊群的问题在早期的Linux系统上确实存在，后来内核引入了SO_REUSEPORT特性，来解决这个问题，作为对比，需要修改accept-server的代码。
 使用SO_REUSEPORT之后的代码是`reuseport-server.c`。我们编译一下，然后启动服务器端。
@@ -137,74 +206,6 @@ lrwx------ 1 root root 64 1月  18 10:42 3 -> socket:[48539735]
 从这里可以看出，在使用SO_REUSEPORT的情况下，即使四个进程不在同一个socket上监听相同的端口，其负载仍然是均衡的，这种均衡是内核实现的。
 
 因为同一个端口对应多个不同的监听socket，不同的socket可能有属于不同的进程，进程的数量常常不是固定的，如何保证负载均衡的效果，数据包来了，如何快速的找到与之对应的socket等。这些都是Linux内核在不断优化中的问题。
-
-# epoll惊群问题
-
-测试环境说明：
-* 操作系统：Ubuntu 18.04.6
-* 内核版本：4.15.0-163-generic
-
-## 编译
-
-```bash
-$ make epoll-seperate-pollfd
-```
-
-## 运行
-
-服务器端程序支持启用EXCLUSIVE模式，启动服务器端程序的命令如下：
-```bash
-# 提高文件描述符限额，否则压测时可能出现文件描述符不够的问题
-$ ulimit 10000
-
-# 默认模式
-$ ./epoll-seperate-pollfd
-use epoll exclusive: 0
-
-# EXCLUSIVE模式
-$ ./epoll-seperate-pollfd exclusive
-use epoll exclusive: 1
-
-```
-
-服务器端程序启动之后，启动6个ab进行压测
-```bash
-$ for i in {1..6}; do ab -n 500000 -c 800 http://localhost:5555/ & done
-```
-
-压测跑完后，看下各个进程处理的请求数量：
-
-```bash
-for p in $(pgrep -f epoll-seperate-pollfd); do kill -USR1 $p; done
-```
-
-这是服务器端的程序会输出统计信息。
-下面是这组是默认模式下，获得的数据：
-
-```
-$ ./epoll-seperate-pollfd
-use epoll exclusive: 0
-4563 got 0 reqs
-4564 got 725269 reqs
-4565 got 742879 reqs
-4566 got 737861 reqs
-4567 got 796875 reqs
-```
-
-下面这组是启用exclusive时的一组数据：
-```
-$ ./epoll-seperate-pollfd
-use epoll exclusive: 1
-4595 got 0 reqs
-4596 got 1159395 reqs
-4597 got 852929 reqs
-4598 got 658337 reqs
-4599 got 332605 reqs
-```
-
-## 结论
-从多次测试的情况来看，*启用exclusive之后，请求的分布很不均衡*，默认模式下各个子进程的负载反而比较均匀。
-从压测的结果看，*启用exclusive之后，请求的平均响应时间更短，每秒钟能处理的请求更多，性能提升约39%。*
 
 # 参考
 
